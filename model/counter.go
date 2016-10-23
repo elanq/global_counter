@@ -13,6 +13,22 @@ type Counter struct {
   InitialValue  int     `json:initial_value`
 }
 
+func CreateCounterFromMap(key string, counterMap map[string]string) (Counter, error) {
+  var err error
+  if counterMap == nil {
+    err = fmt.Errorf("map is nil")
+  }
+
+  value, _ := strconv.Atoi(counterMap["value"])
+  initialValue, _ := strconv.Atoi(counterMap["initial_value"])
+
+  counter := Counter{
+    Name:         key,
+    Value:        value,
+    InitialValue: initialValue}
+  return counter, err
+}
+
 func AddNew(counterName string, initialValue int, redis *redis.Client) (*Counter, error) {
   counter := &Counter{Name: counterName, Value: initialValue, InitialValue: initialValue}
   return counter.UpdateValue(initialValue, 0, redis)

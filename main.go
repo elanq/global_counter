@@ -38,10 +38,26 @@ func Status(w http.ResponseWriter, r *http.Request) {
   fmt.Fprintln(w, "nice to see you")
 }
 
+func GetCounter(w http.ResponseWriter, r *http.Request) {
+  params := mux.Vars(r)
+  redisCounter, err := redis.HGetAll(params["counterName"]).Result()
+  LogError(err)
+
+  if len(redisCounter) == 0{
+    fmt.Fprintln(w, "{message: counter",  params["counterName"] ,"not found}",)
+    return
+  }
+
+  counter, createError := model.CreateCounterFromMap(params["counterName"], redisCounter)
+
+  LogError(createError)
+
+  fmt.Fprintln(w, counter.ToJson())
+}
+
 func PopulateCounters(w http.ResponseWriter, r *http.Request) {
   counterSize, err := redis.LLen(globalCounterKeys).Result()
   LogError(err)
-
 
   if counterSize == 0 {
     fmt.Fprintln(w, "{message: Your counter is empty. add some first}")
@@ -74,6 +90,7 @@ func main() {
 
   router.HandleFunc("/status", Status)
   router.HandleFunc("/counter/all", PopulateCounters)
+  router.HandleFunc("/counter/{counterName}", GetCounter)
 
   fmt.Println("Serving at port 6123")
   http.ListenAndServe(":6123", router)
