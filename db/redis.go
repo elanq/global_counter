@@ -3,6 +3,7 @@ package db
 import(
   "fmt"
   "gopkg.in/redis.v5"
+  "os"
 )
 
 var redisClient *redis.Client
@@ -10,7 +11,7 @@ var redisClient *redis.Client
 func ConnectRedis() (*redis.Client, error) {
   var err error
   redisClient = redis.NewClient(&redis.Options {
-    Addr: "127.0.0.1:6379",
+    Addr: os.GetEnv("REDIS_HOST"),
     })
 
   _, err = redisClient.Ping().Result()
