@@ -24,10 +24,18 @@ func (counter *Counter) UpdateValue(value int, operation int, redis *redis.Clien
 
   switch operation {
   case 0:
-    counterValue := strconv.Itoa(counter.Value)
-    initialValue := strconv.Itoa(counter.InitialValue)
-    redis.HSet(counter.Name, "value", counterValue)
-    redis.HSet(counter.Name, "initial_value", initialValue)
+    redis.HSet(counter.Name, "value", strconv.Itoa(counter.Value))
+    redis.HSet(counter.Name, "initial_value", strconv.Itoa(counter.InitialValue))
+  case 1:
+    //add
+    totalValue := counter.Value + value
+    counter.Value = totalValue
+    redis.HSet(counter.Name, "value", strconv.Itoa(totalValue))
+  case 2:
+    //substract
+    substractValue := counter.Value - value
+    counter.Value = substractValue
+    redis.HSet(counter.Name, "value", strconv.Itoa(substractValue))
   default:
     err = fmt.Errorf("Unrecognize update operation")
   }
