@@ -4,6 +4,7 @@ import(
   "fmt"
   "net/http"
   "strconv"
+  "encoding/json"
 
   "github.com/gorilla/mux"
   "github.com/subosito/gotenv"
@@ -24,14 +25,6 @@ func LogError(err error) {
   if err != nil {
     fmt.Println(err)
   }
-}
-
-func AddCounter(counterName string, initialValue int) {
-  newCounter, err := model.AddNew(counterName, initialValue, redis)
-  LogError(err)
-  fmt.Println("Counter %s created", newCounter.Name)
-
-  redis.LPush(globalCounterKeys, newCounter.Name)
 }
 
 func Status(w http.ResponseWriter, r *http.Request) {
@@ -64,11 +57,11 @@ func PopulateCounters(w http.ResponseWriter, r *http.Request) {
     return
   }
 
-  var counters []string
+  var counters model.Counters
   redisResult, err := redis.LRange(globalCounterKeys, 0, counterSize).Result()
   LogError(err)
-  counterKeys := redisResult
-  for _, counterKey := range counterKeys {
+
+  for _, counterKey := range redisResult {
     redisValue, _ := redis.HGet(counterKey, "value").Result()
     redisInitialValue, _ := redis.HGet(counterKey, "initial_value").Result()
 
@@ -77,10 +70,53 @@ func PopulateCounters(w http.ResponseWriter, r *http.Request) {
 
     counter := model.Counter{Name: counterKey, Value: value, InitialValue: initialValue}
 
-    counters = append(counters, counter.ToJson())
+    counters = append(counters, &counter)
+  }
+  json.NewEncoder(w).Encode(counters)
+}
+
+func ValidateParams(params map[string]string) (bool){
+  status := true
+
+  if params["name"] == "" {
+    status = false
+  } else if params["initial_value"] == "" {
+    status = false
   }
 
-  fmt.Fprintln(w, counters)
+  if len(params) == 0 {
+    status = false
+  }
+
+  return status
+}
+
+func NewCounter(w http.ResponseWriter, r *http.Request) (){
+  params :=  make(map[string]string)
+  params["name"] = r.FormValue("name")
+  params["initial_value"] = r.FormValue("initial_value")
+
+  fmt.Println("params[initial_value]", params["initial_value"])
+  fmt.Println("params[name] ", params["name"])
+  if ValidateParams(params) == false {
+    fmt.Fprintln(w, "{ message: Invalid parameter }")
+    return
+  }
+
+  initial_value, _ := strconv.Atoi(params["initial_value"])
+  counter, err := model.AddNew(params["name"], initial_value, redis)
+  LogError(err)
+
+  if err != nil {
+    fmt.Fprintln(w, "{message: Error creating counter}")
+    return
+  }
+
+  if counter != nil {
+    redis.LPush(globalCounterKeys, counter.Name)
+  }
+
+  fmt.Fprintln(w, counter.ToJson())
 }
 
 func main() {
@@ -90,7 +126,8 @@ func main() {
 
   router.HandleFunc("/status", Status)
   router.HandleFunc("/counter/all", PopulateCounters)
-  router.HandleFunc("/counter/{counterName}", GetCounter)
+  router.HandleFunc("/counter/{counterName}", GetCounter).Methods("GET")
+  router.HandleFunc("/counter/new", NewCounter).Methods("POST")
 
   fmt.Println("Serving at port 6123")
   http.ListenAndServe(":6123", router)

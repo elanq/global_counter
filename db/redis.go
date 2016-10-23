@@ -11,7 +11,7 @@ var redisClient *redis.Client
 func ConnectRedis() (*redis.Client, error) {
   var err error
   redisClient = redis.NewClient(&redis.Options {
-    Addr: os.GetEnv("REDIS_HOST"),
+    Addr: os.Getenv("REDIS_HOST"),
     })
 
   _, err = redisClient.Ping().Result()

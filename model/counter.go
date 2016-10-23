@@ -13,6 +13,8 @@ type Counter struct {
   InitialValue  int     `json:initial_value`
 }
 
+type Counters []*Counter
+
 func CreateCounterFromMap(key string, counterMap map[string]string) (Counter, error) {
   var err error
   if counterMap == nil {
@@ -35,7 +37,6 @@ func AddNew(counterName string, initialValue int, redis *redis.Client) (*Counter
 }
 
 func (counter *Counter) UpdateValue(value int, operation int, redis *redis.Client) (*Counter, error){
-
   var err error
 
   switch operation {
