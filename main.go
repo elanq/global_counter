@@ -4,11 +4,11 @@ import(
   "fmt"
   "net/http"
   "strconv"
-  "encoding/json"
 
   "github.com/gorilla/mux"
   "github.com/subosito/gotenv"
 
+  "global-counter/helper"
   "global-counter/db"
   "global-counter/model"
 )
@@ -42,7 +42,8 @@ func GetCounter(w http.ResponseWriter, r *http.Request) {
     return
   }
   fmt.Println(redisCounter)
-  json.NewEncoder(w).Encode(redisCounter)
+
+  helper.Response(w, redisCounter)
 }
 
 func PopulateCounters(w http.ResponseWriter, r *http.Request) {
@@ -69,15 +70,7 @@ func PopulateCounters(w http.ResponseWriter, r *http.Request) {
 
     counters = append(counters, &counter)
   }
-  json.NewEncoder(w).Encode(counters)
-}
-
-func ValidateParams(params map[string]string, requiredArgs int) (bool){
-  if len(params) == 0 || len(params) < requiredArgs {
-    return false
-  }
-
-  return true
+  helper.Response(w, counters)
 }
 
 func NewCounter(w http.ResponseWriter, r *http.Request) (){
@@ -87,7 +80,7 @@ func NewCounter(w http.ResponseWriter, r *http.Request) (){
 
   fmt.Println("params[initial_value]", params["initial_value"])
   fmt.Println("params[name] ", params["name"])
-  if ValidateParams(params, 2) == false {
+  if helper.ValidateParams(params, 2) == false {
     fmt.Fprintln(w, "{ message: Invalid parameter }")
     return
   }
@@ -105,7 +98,7 @@ func NewCounter(w http.ResponseWriter, r *http.Request) (){
     redis.LPush(globalCounterKeys, counter.Name)
   }
 
-  json.NewEncoder(w).Encode(counter)
+  helper.Response(w, counter)
 }
 
 func UpdateCounterValue(w http.ResponseWriter, r *http.Request) {
@@ -115,7 +108,7 @@ func UpdateCounterValue(w http.ResponseWriter, r *http.Request) {
   params["value"] = r.FormValue("value")
   params["operation"] = r.FormValue("operation")
 
-  if ValidateParams(params, 3) == false {
+  if helper.ValidateParams(params, 3) == false {
     fmt.Fprintln(w, "{\"message\": \"Invalid parameter\"}")
     return
   }
@@ -140,8 +133,7 @@ func UpdateCounterValue(w http.ResponseWriter, r *http.Request) {
     return
   }
 
-  json.NewEncoder(w).Encode(updatedCounter)
-
+  helper.Response(w, updatedCounter)
 }
 
 func main() {
@@ -155,12 +147,4 @@ func main() {
 
   fmt.Println("Serving at port 6123")
   http.ListenAndServe(":6123", router)
-
-  // fmt.Println("Testing counter")
-  // AddCounter("beats_audio", 2000)
-  // AddCounter("tissue_paseo", 3000)
-  // fmt.Println("Populating counter")
-  // for _, counter := range counters {
-  //   fmt.Println(counter.ToJson())
-  // }
 }
