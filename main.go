@@ -9,16 +9,17 @@ import(
   "github.com/gorilla/mux"
   "github.com/subosito/gotenv"
 
-  "github.com/elanq/global_counter/db"
-  "github.com/elanq/global_counter/model"
+  "global-counter/db"
+  "global-counter/model"
 )
 
 var(
+  _ = gotenv.Load()
   redis, redisErr = db.ConnectRedis()
 )
 
 const (
-  globalCounterKeys = "global_counter_key_list"
+  globalCounterKeys = "global_counter:key_list"
 )
 
 func LogError(err error) {
@@ -33,19 +34,15 @@ func Status(w http.ResponseWriter, r *http.Request) {
 
 func GetCounter(w http.ResponseWriter, r *http.Request) {
   params := mux.Vars(r)
-  redisCounter, err := redis.HGetAll(params["counterName"]).Result()
+  redisCounter, err := model.GetCounter(params["counterName"], redis)
   LogError(err)
 
-  if len(redisCounter) == 0{
+  if redisCounter == nil{
     fmt.Fprintln(w, "{message: counter",  params["counterName"] ,"not found}",)
     return
   }
-
-  counter, createError := model.CreateCounterFromMap(params["counterName"], redisCounter)
-
-  LogError(createError)
-
-  fmt.Fprintln(w, counter.ToJson())
+  fmt.Println(redisCounter)
+  json.NewEncoder(w).Encode(redisCounter)
 }
 
 func PopulateCounters(w http.ResponseWriter, r *http.Request) {
@@ -75,20 +72,12 @@ func PopulateCounters(w http.ResponseWriter, r *http.Request) {
   json.NewEncoder(w).Encode(counters)
 }
 
-func ValidateParams(params map[string]string) (bool){
-  status := true
-
-  if params["name"] == "" {
-    status = false
-  } else if params["initial_value"] == "" {
-    status = false
+func ValidateParams(params map[string]string, requiredArgs int) (bool){
+  if len(params) == 0 || len(params) < requiredArgs {
+    return false
   }
 
-  if len(params) == 0 {
-    status = false
-  }
-
-  return status
+  return true
 }
 
 func NewCounter(w http.ResponseWriter, r *http.Request) (){
@@ -98,13 +87,13 @@ func NewCounter(w http.ResponseWriter, r *http.Request) (){
 
   fmt.Println("params[initial_value]", params["initial_value"])
   fmt.Println("params[name] ", params["name"])
-  if ValidateParams(params) == false {
+  if ValidateParams(params, 2) == false {
     fmt.Fprintln(w, "{ message: Invalid parameter }")
     return
   }
 
   initial_value, _ := strconv.Atoi(params["initial_value"])
-  counter, err := model.AddNew(params["name"], initial_value, redis)
+  counter, err := model.AddNewCounter(params["name"], initial_value, redis)
   LogError(err)
 
   if err != nil {
@@ -116,18 +105,53 @@ func NewCounter(w http.ResponseWriter, r *http.Request) (){
     redis.LPush(globalCounterKeys, counter.Name)
   }
 
-  fmt.Fprintln(w, counter.ToJson())
+  json.NewEncoder(w).Encode(counter)
+}
+
+func UpdateCounterValue(w http.ResponseWriter, r *http.Request) {
+  var err error
+  params := make(map[string]string)
+  params["name"] = r.FormValue("name")
+  params["value"] = r.FormValue("value")
+  params["operation"] = r.FormValue("operation")
+
+  if ValidateParams(params, 3) == false {
+    fmt.Fprintln(w, "{\"message\": \"Invalid parameter\"}")
+    return
+  }
+
+  counter, err := model.GetCounter(params["name"], redis)
+  LogError(err)
+  if err != nil {
+    fmt.Fprintln(w, "{\"message\": \"Error populating counter\"}")
+    return
+  }
+
+  value, _ := strconv.Atoi(params["value"])
+  operation, _ := strconv.Atoi(params["operation"])
+
+  if operation == 0 {
+    fmt.Fprintln(w, "{\"message\" : \"Invalid operation\"}")
+    return
+  }
+  updatedCounter, err := counter.UpdateValue(value, operation, redis)
+  if err != nil {
+    fmt.Fprintln(w, "{\"message\":\",", err, "\"}")
+    return
+  }
+
+  json.NewEncoder(w).Encode(updatedCounter)
+
 }
 
 func main() {
-  gotenv.Load()
-
   router := mux.NewRouter().StrictSlash(true)
 
   router.HandleFunc("/status", Status)
   router.HandleFunc("/counter/all", PopulateCounters)
   router.HandleFunc("/counter/{counterName}", GetCounter).Methods("GET")
   router.HandleFunc("/counter/new", NewCounter).Methods("POST")
+  router.HandleFunc("/counter/update", UpdateCounterValue).Methods("PUT")
 
   fmt.Println("Serving at port 6123")
   http.ListenAndServe(":6123", router)

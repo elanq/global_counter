@@ -31,7 +31,7 @@ func CreateCounterFromMap(key string, counterMap map[string]string) (Counter, er
   return counter, err
 }
 
-func AddNew(counterName string, initialValue int, redis *redis.Client) (*Counter, error) {
+func AddNewCounter(counterName string, initialValue int, redis *redis.Client) (*Counter, error) {
   counter := &Counter{Name: counterName, Value: initialValue, InitialValue: initialValue}
   return counter.UpdateValue(initialValue, 0, redis)
 }
@@ -58,6 +58,17 @@ func (counter *Counter) UpdateValue(value int, operation int, redis *redis.Clien
   }
 
   return counter, err
+}
+
+func GetCounter(counterName string, redis *redis.Client) (*Counter, error) {
+  result, err := redis.HGetAll(counterName).Result()
+  fmt.Println(result)
+  if len(result) == 0 {
+    return nil, err
+  }
+
+  counter, _ := CreateCounterFromMap(counterName, result)
+  return &counter, err
 }
 
 func (counter *Counter) ToJson() (string) {
